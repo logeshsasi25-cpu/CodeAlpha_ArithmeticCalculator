@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Arithmetic Calculator</title>
+<style>
+  :root{
+    --bg: #0f1724;
+    --panel: #111827;
+    --accent: #06b6d4;
+    --muted: #94a3b8;
+    --glass: rgba(255,255,255,0.03);
+    --btn-bg: #1f2937;
+    --danger: #ef4444;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+
+  /* Page */
+  html,body{
+    height:100%;
+    margin:0;
+    background: linear-gradient(180deg,#07132a 0%, #0b1220 100%);
+    color: #e6eef6;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+
+  /* Calculator card */
+  .calc {
+    width:100%;
+    max-width:420px;
+    border-radius:14px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+    padding:18px;
+    backdrop-filter: blur(6px);
+  }
+
+  /* Display */
+  .display {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    padding:12px;
+    border-radius:8px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+    margin-bottom:12px;
+    min-height:76px;
+    box-sizing:border-box;
+  }
+  .history {
+    font-size:0.85rem;
+    color:var(--muted);
+    min-height:18px;
+    text-align:right;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+  }
+  .output {
+    font-size:2rem;
+    text-align:right;
+    font-weight:600;
+    letter-spacing:0.5px;
+    line-height:1;
+    word-break:break-all;
+  }
+
+  /* Buttons grid */
+  .pad {
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:10px;
+  }
+
+  button.btn {
+    background:var(--btn-bg);
+    color: #ebf8ff;
+    border: none;
+    padding:16px;
+    border-radius:10px;
+    font-size:1.05rem;
+    cursor:pointer;
+    transition: transform .08s ease, box-shadow .12s ease, background .12s;
+    box-shadow: 0 6px 14px rgba(2,6,23,0.6);
+    user-select:none;
+  }
+
+  button.btn:active { transform: translateY(1px) scale(0.996); }
+  button.btn:hover { transform: translateY(-3px); }
+
+  /* Special styles */
+  .btn.op {
+    background: linear-gradient(180deg, rgba(6,182,212,0.12), rgba(6,182,212,0.06));
+    color: var(--accent);
+    font-weight:600;
+    box-shadow: 0 8px 20px rgba(6,182,212,0.06);
+  }
+  .btn.equal {
+    background: linear-gradient(180deg,#06b6d4,#0891b2);
+    color: #06212a;
+    font-weight:700;
+    grid-column: span 2;
+  }
+  .btn.clear {
+    background: linear-gradient(180deg, rgba(239,68,68,0.12), rgba(239,68,68,0.06));
+    color: var(--danger);
+  }
+  .btn.wide { grid-column: span 2; }
+
+  /* Responsive tweaks */
+  @media (max-width:420px){
+    .output { font-size:1.6rem; }
+    button.btn { padding:12px; font-size:1rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="calc" role="application" aria-label="Arithmetic calculator">
+  <div class="display" aria-live="polite">
+    <div class="history" id="history"></div>
+    <div class="output" id="display">0</div>
+  </div>
+
+  <div class="pad" role="group" aria-label="calculator keys">
+    <button class="btn clear" data-action="clear" title="Clear (Esc)">C</button>
+    <button class="btn" data-action="back" title="Backspace (Backspace)">⌫</button>
+    <button class="btn op" data-action="percent" title="Percent">%</button>
+    <button class="btn op" data-action="operator" data-op="divide" title="Divide">÷</button>
+
+    <button class="btn" data-number="7">7</button>
+    <button class="btn" data-number="8">8</button>
+    <button class="btn" data-number="9">9</button>
+    <button class="btn op" data-action="operator" data-op="multiply">×</button>
+
+    <button class="btn" data-number="4">4</button>
+    <button class="btn" data-number="5">5</button>
+    <button class="btn" data-number="6">6</button>
+    <button class="btn op" data-action="operator" data-op="subtract">−</button>
+
+    <button class="btn" data-number="1">1</button>
+    <button class="btn" data-number="2">2</button>
+    <button class="btn" data-number="3">3</button>
+    <button class="btn op" data-action="operator" data-op="add">+</button>
+
+    <button class="btn wide" data-number="0">0</button>
+    <button class="btn" data-action="decimal">.</button>
+    <button class="btn equal" data-action="equals" title="Equals (Enter)">=</button>
+  </div>
+</div>
+
+<script>
+/*
+  Simple calculator logic using "state" variables:
+  - current: string for the currently-typed number
+  - previous: stored number as string when operator pressed
+  - operator: one of 'add','subtract','multiply','divide' or null
+  The calculator behaves like a typical pocket calculator.
+*/
+
+(function () {
+  const displayEl = document.getElementById('display');
+  const historyEl = document.getElementById('history');
+  const buttons = document.querySelectorAll('.pad button');
+
+  let current = '0';
+  let previous = null;
+  let operator = null;
+  let justEvaluated = false;
+
+  function updateDisplay() {
+    displayEl.textContent = current;
+    historyEl.textContent = previous !== null && operator ? `${previous} ${opSymbol(operator)}` : '';
+  }
+
+  function opSymbol(op){
+    return ({ add: '+', subtract: '−', multiply: '×', divide: '÷' }[op] || '');
+  }
+
+  // Basic arithmetic with rounding to avoid floating precision issues
+  function compute(a, b, op){
+    const x = Number(a);
+    const y = Number(b);
+    if (Number.isNaN(x) || Number.isNaN(y)) return '0';
+    let result;
+    switch(op){
+      case 'add': result = x + y; break;
+      case 'subtract': result = x - y; break;
+      case 'multiply': result = x * y; break;
+      case 'divide':
+        if (y === 0) return 'ERR'; // divide by zero
+        result = x / y; break;
+      default: return b;
+    }
+    // Round to sensible precision (max 12 significant digits)
+    return String(Math.round((result + Number.EPSILON) * 1e12) / 1e12);
+  }
+
+  // Button handlers
+  function onNumber(num){
+    if (justEvaluated) { current = num; justEvaluated = false; }
+    else if (current === '0') current = num;
+    else current += num;
+    updateDisplay();
+  }
+  function onDecimal(){
+    if (justEvaluated) { current = '0.'; justEvaluated = false; updateDisplay(); return; }
+    if (!current.includes('.')) current += '.';
+    updateDisplay();
+  }
+  function onClear(){
+    current = '0'; previous = null; operator = null; justEvaluated = false; updateDisplay();
+  }
+  function onBackspace(){
+    if (justEvaluated) { current = '0'; justEvaluated = false; updateDisplay(); return; }
+    if (current.length <= 1) current = '0';
+    else current = current.slice(0,-1);
+    updateDisplay();
+  }
+  function onPercent(){
+    // percent of current (e.g., 50% -> 0.5). If there's a previous & operator, treat as (previous * current/100) when equals pressed.
+    current = String(Number(current) / 100);
+    updateDisplay();
+  }
+  function onOperator(op){
+    if (operator && previous !== null && !justEvaluated) {
+      // chaining: compute previous op first
+      const res = compute(previous, current, operator);
+      if (res === 'ERR') { current = res; previous = null; operator = null; justEvaluated = true; updateDisplay(); return; }
+      previous = res;
+    } else {
+      previous = current;
+    }
+    operator = op;
+    justEvaluated = false;
+    current = '0';
+    updateDisplay();
+  }
+  function onEquals(){
+    if (!operator || previous === null) return;
+    const res = compute(previous, current, operator);
+    current = res;
+    previous = null;
+    operator = null;
+    justEvaluated = true;
+    updateDisplay();
+  }
+
+  // Wire up UI buttons
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const num = btn.dataset.number;
+      const action = btn.dataset.action;
+      const op = btn.dataset.op;
+
+      if (num !== undefined) onNumber(num);
+      else if (action === 'decimal') onDecimal();
+      else if (action === 'clear') onClear();
+      else if (action === 'back') onBackspace();
+      else if (action === 'percent') onPercent();
+      else if (action === 'operator') onOperator(op);
+      else if (action === 'equals') onEquals();
+    });
+  });
+
+  // Keyboard support
+  window.addEventListener('keydown', (e) => {
+    if (/^\d$/.test(e.key)) { onNumber(e.key); e.preventDefault(); return; }
+    if (e.key === '.') { onDecimal(); e.preventDefault(); return; }
+    if (e.key === 'Backspace') { onBackspace(); e.preventDefault(); return; }
+    if (e.key === 'Escape') { onClear(); e.preventDefault(); return; }
+    if (e.key === 'Enter' || e.key === '=') { onEquals(); e.preventDefault(); return; }
+    if (e.key === '+') { onOperator('add'); e.preventDefault(); return; }
+    if (e.key === '-') { onOperator('subtract'); e.preventDefault(); return; }
+    if (e.key === '*') { onOperator('multiply'); e.preventDefault(); return; }
+    if (e.key === '/') { onOperator('divide'); e.preventDefault(); return; }
+    if (e.key === '%') { onPercent(); e.preventDefault(); return; }
+  });
+
+  // initialize
+  updateDisplay();
+
+})();
+</script>
